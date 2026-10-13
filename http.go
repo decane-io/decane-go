@@ -1,8 +1,10 @@
-package granthe
+package decane
 
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,6 +35,10 @@ func newHTTPClient(apiKey, apiSecret, baseURL string, timeout time.Duration) *ht
 }
 
 func (h *httpClient) do(ctx context.Context, method, path string, body interface{}, params map[string]string) ([]byte, error) {
+	return h.doHeaders(ctx, method, path, body, params, nil)
+}
+
+func (h *httpClient) doHeaders(ctx context.Context, method, path string, body interface{}, params map[string]string, headers map[string]string) ([]byte, error) {
 	fullURL := h.baseURL + path
 
 	if len(params) > 0 {
@@ -64,9 +70,12 @@ func (h *httpClient) do(ctx context.Context, method, path string, body interface
 		}
 		req.Header.Set("X-API-Key", h.apiKey)
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", "flow-go/"+Version)
+		req.Header.Set("User-Agent", "decane-go/"+Version)
 		if h.apiSecret != "" {
 			req.Header.Set("X-API-Secret", h.apiSecret)
+		}
+		for k, v := range headers {
+			req.Header.Set(k, v)
 		}
 
 		// Reset body reader for retries
@@ -83,7 +92,7 @@ func (h *httpClient) do(ctx context.Context, method, path string, body interface
 				time.Sleep(time.Duration(1<<attempt) * 500 * time.Millisecond)
 				continue
 			}
-			return nil, &GrantheError{Message: err.Error(), Code: "network_error"}
+			return nil, &DecaneError{Message: err.Error(), Code: "network_error"}
 		}
 		defer resp.Body.Close()
 
@@ -117,9 +126,9 @@ func (h *httpClient) do(ctx context.Context, method, path string, body interface
 	}
 
 	if lastErr != nil {
-		return nil, &GrantheError{Message: lastErr.Error(), Code: "network_error"}
+		return nil, &DecaneError{Message: lastErr.Error(), Code: "network_error"}
 	}
-	return nil, &GrantheError{Message: "max retries exceeded", Code: "network_error"}
+	return nil, &DecaneError{Message: "max retries exceeded", Code: "network_error"}
 }
 
 func (h *httpClient) get(ctx context.Context, path string, params map[string]string) ([]byte, error) {
@@ -128,6 +137,46 @@ func (h *httpClient) get(ctx context.Context, path string, params map[string]str
 
 func (h *httpClient) post(ctx context.Context, path string, body interface{}) ([]byte, error) {
 	return h.do(ctx, http.MethodPost, path, body, nil)
+}
+
+// postIdempotent POSTs with an Idempotency-Key header. The SDK retries
+// automatically, so if the caller gave no key a random UUID v4 is generated
+// once and reused on every attempt.
+func (h *httpClient) postIdempotent(ctx context.Context, path string, body interface{}, opts []RequestOption) ([]byte, error) {
+	var ro requestOptions
+	for _, o := range opts {
+		o(&ro)
+	}
+	key := ro.idempotencyKey
+	if key == "" {
+		key = newUUID()
+	}
+	return h.doHeaders(ctx, http.MethodPost, path, body, nil, map[string]string{"Idempotency-Key": key})
+}
+
+type requestOptions struct {
+	idempotencyKey string
+}
+
+// RequestOption customises a single create call.
+type RequestOption func(*requestOptions)
+
+// WithIdempotencyKey sets the Idempotency-Key header (1-255 characters:
+// letters, digits, . _ : -). Retrying with the same key and body returns the
+// first response. If you do not pass one, a random key is generated.
+func WithIdempotencyKey(key string) RequestOption {
+	return func(o *requestOptions) { o.idempotencyKey = key }
+}
+
+func newUUID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic("decane: crypto/rand failed: " + err.Error())
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	h := hex.EncodeToString(b[:])
+	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
 }
 
 func shouldRetry(status int) bool {
@@ -155,24 +204,24 @@ func parseError(status int, body []byte, headers http.Header) error {
 		msg = string(body)
 	}
 
-	base := GrantheError{Message: msg, Code: errBody.Code, Status: status}
+	base := DecaneError{Message: msg, Code: errBody.Code, Status: status}
 
 	switch status {
 	case 401:
-		return &AuthenticationError{GrantheError: base}
+		return &AuthenticationError{DecaneError: base}
 	case 404:
-		return &NotFoundError{GrantheError: base}
+		return &NotFoundError{DecaneError: base}
 	case 422:
-		return &ValidationError{GrantheError: base, Errors: errBody.Errors}
+		return &ValidationError{DecaneError: base, Errors: errBody.Errors}
 	case 429:
 		var retryAfter float64
 		if ra := headers.Get("Retry-After"); ra != "" {
 			retryAfter, _ = strconv.ParseFloat(ra, 64)
 		}
-		return &RateLimitError{GrantheError: base, RetryAfter: retryAfter}
+		return &RateLimitError{DecaneError: base, RetryAfter: retryAfter}
 	default:
 		if status >= 500 {
-			return &ServerError{GrantheError: base}
+			return &ServerError{DecaneError: base}
 		}
 		return &base
 	}

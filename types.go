@@ -1,4 +1,6 @@
-package granthe
+package decane
+
+import "encoding/json"
 
 // Invoice represents a payment invoice.
 type Invoice struct {
@@ -44,21 +46,21 @@ type CreateInvoiceParams struct {
 
 // Payout represents a vendor payout.
 type Payout struct {
-	ID               string                 `json:"id"`
-	Network          string                 `json:"network"`
-	Currency         string                 `json:"currency"`
-	Status           string                 `json:"status"`
-	GrossAmount      float64                `json:"gross_amount,string"`
-	NetAmount        float64                `json:"net_amount,string"`
-	FeeAmount        float64                `json:"fee_amount,string"`
-	NMCAmount        float64                `json:"nmc_amount,string,omitempty"`
-	RecipientAddress string                 `json:"recipient_address"`
-	ReferenceID      string                 `json:"reference_id,omitempty"`
-	BatchID          string                 `json:"batch_id,omitempty"`
-	TxHash           string                 `json:"tx_hash,omitempty"`
-	ErrorMessage     string                 `json:"error_message,omitempty"`
-	CreatedAt        string                 `json:"created_at,omitempty"`
-	CompletedAt      string                 `json:"completed_at,omitempty"`
+	ID               string  `json:"id"`
+	Network          string  `json:"network"`
+	Currency         string  `json:"currency"`
+	Status           string  `json:"status"`
+	GrossAmount      float64 `json:"gross_amount,string"`
+	NetAmount        float64 `json:"net_amount,string"`
+	FeeAmount        float64 `json:"fee_amount,string"`
+	NMCAmount        float64 `json:"nmc_amount,string,omitempty"`
+	RecipientAddress string  `json:"recipient_address"`
+	ReferenceID      string  `json:"reference_id,omitempty"`
+	BatchID          string  `json:"batch_id,omitempty"`
+	TxHash           string  `json:"tx_hash,omitempty"`
+	ErrorMessage     string  `json:"error_message,omitempty"`
+	CreatedAt        string  `json:"created_at,omitempty"`
+	CompletedAt      string  `json:"completed_at,omitempty"`
 }
 
 // CreatePayoutParams are parameters for creating a payout.
@@ -124,6 +126,31 @@ type WebhookEvent struct {
 	Type      string                 `json:"event"`
 	Data      map[string]interface{} `json:"data"`
 	CreatedAt string                 `json:"timestamp,omitempty"`
+}
+
+// UnmarshalJSON accepts "timestamp" as either a string or a number (unix
+// seconds), since the server sends both depending on the event.
+func (e *WebhookEvent) UnmarshalJSON(b []byte) error {
+	var raw struct {
+		ID        string                 `json:"id"`
+		Type      string                 `json:"event"`
+		Data      map[string]interface{} `json:"data"`
+		Timestamp json.RawMessage        `json:"timestamp"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	e.ID, e.Type, e.Data = raw.ID, raw.Type, raw.Data
+	e.CreatedAt = ""
+	if len(raw.Timestamp) > 0 && string(raw.Timestamp) != "null" {
+		var s string
+		if err := json.Unmarshal(raw.Timestamp, &s); err == nil {
+			e.CreatedAt = s
+		} else {
+			e.CreatedAt = string(raw.Timestamp)
+		}
+	}
+	return nil
 }
 
 // ListParams are common parameters for list endpoints.

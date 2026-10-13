@@ -1,4 +1,4 @@
-package granthe
+package decane
 
 import (
 	"context"
@@ -11,9 +11,11 @@ type PayoutService struct {
 	http *httpClient
 }
 
-// Create requests a payout to an external wallet address.
-func (s *PayoutService) Create(ctx context.Context, params *CreatePayoutParams) (*Payout, error) {
-	data, err := s.http.post(ctx, "/vendor/payout", params)
+// Create requests a payout to an external wallet address. Pass
+// WithIdempotencyKey to set the Idempotency-Key header; if omitted a random
+// key is generated so automatic retries are safe.
+func (s *PayoutService) Create(ctx context.Context, params *CreatePayoutParams, opts ...RequestOption) (*Payout, error) {
+	data, err := s.http.postIdempotent(ctx, "/vendor/payout", params, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -24,10 +26,11 @@ func (s *PayoutService) Create(ctx context.Context, params *CreatePayoutParams) 
 	return &p, nil
 }
 
-// CreateBatch creates multiple payouts in a single request.
-func (s *PayoutService) CreateBatch(ctx context.Context, payouts []*CreatePayoutParams) ([]*Payout, error) {
+// CreateBatch creates multiple payouts in a single request. Idempotency works
+// as in Create.
+func (s *PayoutService) CreateBatch(ctx context.Context, payouts []*CreatePayoutParams, opts ...RequestOption) ([]*Payout, error) {
 	body := map[string]interface{}{"payouts": payouts}
-	data, err := s.http.post(ctx, "/vendor/payout/batch", body)
+	data, err := s.http.postIdempotent(ctx, "/vendor/payout/batch", body, opts)
 	if err != nil {
 		return nil, err
 	}

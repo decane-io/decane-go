@@ -1,4 +1,4 @@
-package granthe
+package decane
 
 import (
 	"context"
@@ -12,9 +12,11 @@ type InvoiceService struct {
 	http *httpClient
 }
 
-// Create creates a new payment invoice.
-func (s *InvoiceService) Create(ctx context.Context, params *CreateInvoiceParams) (*Invoice, error) {
-	data, err := s.http.post(ctx, "/invoices", params)
+// Create creates a new payment invoice. Pass WithIdempotencyKey to set the
+// Idempotency-Key header; if omitted a random key is generated so automatic
+// retries are safe.
+func (s *InvoiceService) Create(ctx context.Context, params *CreateInvoiceParams, opts ...RequestOption) (*Invoice, error) {
+	data, err := s.http.postIdempotent(ctx, "/invoices", params, opts)
 	if err != nil {
 		return nil, err
 	}

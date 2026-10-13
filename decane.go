@@ -1,26 +1,26 @@
-// Package granthe provides the official Go SDK for Granthe —
+// Package decane provides the official Go SDK for Decane —
 // institutional liquidity rail for crypto settlement.
 //
 // Usage:
 //
-//	client := granthe.New("vf_live_...", granthe.WithWebhookSecret("whsec_..."))
+//	client := decane.New("gr_...", decane.WithWebhookSecret("gr_whsec_..."))
 //
-//	invoice, err := client.Invoices.Create(ctx, &granthe.CreateInvoiceParams{
+//	invoice, err := client.Invoices.Create(ctx, &decane.CreateInvoiceParams{
 //	    Amount:   100,
 //	    Currency: "USDT",
 //	    Network:  "tron",
 //	})
-package granthe
+package decane
 
 import "time"
 
 const (
-	DefaultBaseURL = "https://api.granthe.io/api/v1"
+	DefaultBaseURL = "https://api.decane.io/api/v1"
 	DefaultTimeout = 30 * time.Second
-	Version        = "0.6.0"
+	Version        = "0.8.0"
 )
 
-// Client is the Granthe API client.
+// Client is the Decane API client.
 type Client struct {
 	Invoices      *InvoiceService
 	Payouts       *PayoutService
@@ -29,7 +29,6 @@ type Client struct {
 	Webhooks      *WebhookService
 	PaymentLinks  *PaymentLinkService
 	Subscriptions *SubscriptionService
-	Teams         *TeamService
 
 	http *httpClient
 }
@@ -57,7 +56,7 @@ func WithWebhookSecret(secret string) Option {
 	return func(c *Client) { c.Webhooks = NewWebhookService(secret) }
 }
 
-// New creates a new Granthe client.
+// New creates a new Decane client.
 func New(apiKey string, opts ...Option) *Client {
 	h := newHTTPClient(apiKey, "", DefaultBaseURL, DefaultTimeout)
 
@@ -76,7 +75,6 @@ func New(apiKey string, opts ...Option) *Client {
 	c.Swaps = &SwapService{http: h}
 	c.PaymentLinks = &PaymentLinkService{http: h}
 	c.Subscriptions = &SubscriptionService{http: h}
-	c.Teams = &TeamService{http: h}
 
 	return c
 }

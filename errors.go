@@ -1,38 +1,38 @@
-package granthe
+package decane
 
 import "fmt"
 
-// GrantheError is the base error type for all API errors.
-type GrantheError struct {
+// DecaneError is the base error type for all API errors.
+type DecaneError struct {
 	Message string `json:"message"`
 	Code    string `json:"code"`
 	Status  int    `json:"status"`
 }
 
-func (e *GrantheError) Error() string {
+func (e *DecaneError) Error() string {
 	return fmt.Sprintf("flow: %s (code=%s, status=%d)", e.Message, e.Code, e.Status)
 }
 
 // AuthenticationError indicates an invalid or missing API key.
-type AuthenticationError struct{ GrantheError }
+type AuthenticationError struct{ DecaneError }
 
 // NotFoundError indicates the requested resource was not found.
-type NotFoundError struct{ GrantheError }
+type NotFoundError struct{ DecaneError }
 
 // ValidationError indicates invalid request parameters.
 type ValidationError struct {
-	GrantheError
+	DecaneError
 	Errors []map[string]string `json:"errors"`
 }
 
 // RateLimitError indicates too many requests.
 type RateLimitError struct {
-	GrantheError
+	DecaneError
 	RetryAfter float64 `json:"retry_after"`
 }
 
 // ServerError indicates a server-side error.
-type ServerError struct{ GrantheError }
+type ServerError struct{ DecaneError }
 
 // InvalidSignatureError indicates webhook signature verification failed.
 type InvalidSignatureError struct {
