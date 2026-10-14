@@ -22,7 +22,7 @@ func (s *InvoiceService) Create(ctx context.Context, params *CreateInvoiceParams
 	}
 	var inv Invoice
 	if err := json.Unmarshal(data, &inv); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal invoice: %w", err)
+		return nil, fmt.Errorf("decane: unmarshal invoice: %w", err)
 	}
 	return &inv, nil
 }
@@ -35,21 +35,20 @@ func (s *InvoiceService) Get(ctx context.Context, id string) (*Invoice, error) {
 	}
 	var inv Invoice
 	if err := json.Unmarshal(data, &inv); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal invoice: %w", err)
+		return nil, fmt.Errorf("decane: unmarshal invoice: %w", err)
 	}
 	return &inv, nil
 }
 
-// List returns a paginated list of invoices.
-func (s *InvoiceService) List(ctx context.Context, params *ListParams) (*PaginatedList[Invoice], error) {
-	p := listToMap(params)
-	data, err := s.http.get(ctx, "/invoices", p)
+// List returns one page of invoices, newest first of invoices.
+func (s *InvoiceService) List(ctx context.Context, params *ListParams) (*List[Invoice], error) {
+	data, err := s.http.get(ctx, "/invoices", listQuery(params))
 	if err != nil {
 		return nil, err
 	}
-	var result PaginatedList[Invoice]
+	var result List[Invoice]
 	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal invoices: %w", err)
+		return nil, fmt.Errorf("decane: unmarshal invoices: %w", err)
 	}
 	return &result, nil
 }
@@ -62,30 +61,38 @@ func (s *InvoiceService) Cancel(ctx context.Context, id string) (*Invoice, error
 	}
 	var inv Invoice
 	if err := json.Unmarshal(data, &inv); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal invoice: %w", err)
+		return nil, fmt.Errorf("decane: unmarshal invoice: %w", err)
 	}
 	return &inv, nil
 }
 
-func listToMap(p *ListParams) map[string]string {
+// Simulate settles a test invoice. outcome is "completed", "underpaid" or
+// "expired". It works with a test key (gr_test_...) only.
+func (s *InvoiceService) Simulate(ctx context.Context, id, outcome string) (*Invoice, error) {
+	data, err := s.http.post(ctx, "/invoices/"+id+"/simulate", map[string]string{"outcome": outcome})
+	if err != nil {
+		return nil, err
+	}
+	var inv Invoice
+	if err := json.Unmarshal(data, &inv); err != nil {
+		return nil, fmt.Errorf("decane: unmarshal invoice: %w", err)
+	}
+	return &inv, nil
+}
+
+func listQuery(p *ListParams) map[string]string {
 	if p == nil {
 		return nil
 	}
 	m := map[string]string{}
-	if p.Page > 0 {
-		m["page"] = strconv.Itoa(p.Page)
-	}
 	if p.Limit > 0 {
 		m["limit"] = strconv.Itoa(p.Limit)
 	}
+	if p.StartingAfter != "" {
+		m["starting_after"] = p.StartingAfter
+	}
 	if p.Status != "" {
 		m["status"] = p.Status
-	}
-	if p.Currency != "" {
-		m["currency"] = p.Currency
-	}
-	if p.Network != "" {
-		m["network"] = p.Network
 	}
 	return m
 }

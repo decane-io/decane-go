@@ -45,7 +45,7 @@ func (s *WebhookService) Verify(payload []byte, signature string) (*WebhookEvent
 
 	var event WebhookEvent
 	if err := json.Unmarshal(payload, &event); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal webhook event: %w", err)
+		return nil, fmt.Errorf("decane: unmarshal webhook event: %w", err)
 	}
 	return &event, nil
 }
@@ -64,23 +64,18 @@ func (s *WebhookService) IsValid(payload []byte, signature string) bool {
 }
 
 // VerifyRequest reads and verifies a webhook from an http.Request.
-// It reads the signature from the X-Decane-Signature header, falling back to
-// X-Granthe-Signature and the legacy X-Flow-Signature headers for backward compatibility.
+// It reads the signature from the X-Decane-Signature header.
+//
+// Deprecated: use ConstructEventFromRequest.
 func (s *WebhookService) VerifyRequest(r *http.Request) (*WebhookEvent, error) {
 	signature := r.Header.Get("X-Decane-Signature")
-	if signature == "" {
-		signature = r.Header.Get("X-Granthe-Signature")
-	}
-	if signature == "" {
-		signature = r.Header.Get("X-Flow-Signature")
-	}
 	if signature == "" {
 		return nil, &InvalidSignatureError{Message: "missing X-Decane-Signature header"}
 	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		return nil, fmt.Errorf("flow: read request body: %w", err)
+		return nil, fmt.Errorf("decane: read request body: %w", err)
 	}
 	defer r.Body.Close()
 
@@ -156,25 +151,22 @@ func (s *WebhookService) ConstructEvent(payload []byte, header string, tolerance
 	}
 	var event WebhookEvent
 	if err := json.Unmarshal(payload, &event); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal webhook event: %w", err)
+		return nil, fmt.Errorf("decane: unmarshal webhook event: %w", err)
 	}
 	return &event, nil
 }
 
-// ConstructEventFromRequest reads the body and Decane-Signature header (or the older Granthe-Signature) of an
+// ConstructEventFromRequest reads the body and Decane-Signature header of an
 // http.Request, verifies them, and returns the parsed event. Pass 0 for the
 // default tolerance.
 func (s *WebhookService) ConstructEventFromRequest(r *http.Request, tolerance time.Duration) (*WebhookEvent, error) {
 	header := r.Header.Get("Decane-Signature")
 	if header == "" {
-		header = r.Header.Get("Granthe-Signature")
-	}
-	if header == "" {
 		return nil, &InvalidSignatureError{Message: "missing Decane-Signature header"}
 	}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		return nil, fmt.Errorf("flow: read request body: %w", err)
+		return nil, fmt.Errorf("decane: read request body: %w", err)
 	}
 	defer r.Body.Close()
 	return s.ConstructEvent(body, header, tolerance)

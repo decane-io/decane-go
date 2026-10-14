@@ -57,7 +57,7 @@ func (h *httpClient) doHeaders(ctx context.Context, method, path string, body in
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
-			return nil, fmt.Errorf("flow: marshal error: %w", err)
+			return nil, fmt.Errorf("decane: marshal error: %w", err)
 		}
 		bodyReader = bytes.NewReader(data)
 	}
@@ -66,7 +66,7 @@ func (h *httpClient) doHeaders(ctx context.Context, method, path string, body in
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, method, fullURL, bodyReader)
 		if err != nil {
-			return nil, fmt.Errorf("flow: request error: %w", err)
+			return nil, fmt.Errorf("decane: request error: %w", err)
 		}
 		req.Header.Set("X-API-Key", h.apiKey)
 		req.Header.Set("Content-Type", "application/json")
@@ -98,7 +98,7 @@ func (h *httpClient) doHeaders(ctx context.Context, method, path string, body in
 
 		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return nil, fmt.Errorf("flow: read body error: %w", err)
+			return nil, fmt.Errorf("decane: read body error: %w", err)
 		}
 
 		if shouldRetry(resp.StatusCode) && attempt < maxRetries-1 {
@@ -185,32 +185,63 @@ func shouldRetry(status int) bool {
 
 func parseError(status int, body []byte, headers http.Header) error {
 	var errBody struct {
-		Detail  string              `json:"detail"`
-		Message string              `json:"message"`
-		Error   string              `json:"error"`
-		Code    string              `json:"code"`
-		Errors  []map[string]string `json:"errors"`
+		Detail    json.RawMessage     `json:"detail"`
+		Message   string              `json:"message"`
+		Code      string              `json:"code"`
+		RequestID string              `json:"request_id"`
+		Error     json.RawMessage     `json:"error"`
+		Errors    []map[string]string `json:"errors"`
 	}
 	_ = json.Unmarshal(body, &errBody)
 
-	msg := errBody.Detail
+	var detail string
+	_ = json.Unmarshal(errBody.Detail, &detail)
+	msg := detail
 	if msg == "" {
 		msg = errBody.Message
 	}
-	if msg == "" {
-		msg = errBody.Error
+
+	base := DecaneError{Code: errBody.Code, Status: status, RequestID: errBody.RequestID}
+	if base.RequestID == "" {
+		base.RequestID = headers.Get("X-Request-ID")
+	}
+
+	var obj struct {
+		Type    string      `json:"type"`
+		Code    string      `json:"code"`
+		Message string      `json:"message"`
+		Param   interface{} `json:"param"`
+	}
+	if len(errBody.Error) > 0 && errBody.Error[0] == '{' && json.Unmarshal(errBody.Error, &obj) == nil {
+		base.Type = obj.Type
+		if obj.Code != "" {
+			base.Code = obj.Code
+		}
+		if obj.Message != "" {
+			msg = obj.Message
+		}
+		if p, ok := obj.Param.(string); ok {
+			base.Param = p
+		}
+	} else if msg == "" {
+		var s string
+		_ = json.Unmarshal(errBody.Error, &s)
+		msg = s
 	}
 	if msg == "" {
 		msg = string(body)
 	}
-
-	base := DecaneError{Message: msg, Code: errBody.Code, Status: status}
+	base.Message = msg
 
 	switch status {
 	case 401:
 		return &AuthenticationError{DecaneError: base}
+	case 403:
+		return &PermissionError{DecaneError: base}
 	case 404:
 		return &NotFoundError{DecaneError: base}
+	case 409:
+		return &ConflictError{DecaneError: base}
 	case 422:
 		return &ValidationError{DecaneError: base, Errors: errBody.Errors}
 	case 429:

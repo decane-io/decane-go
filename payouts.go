@@ -21,51 +21,47 @@ func (s *PayoutService) Create(ctx context.Context, params *CreatePayoutParams, 
 	}
 	var p Payout
 	if err := json.Unmarshal(data, &p); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal payout: %w", err)
+		return nil, fmt.Errorf("decane: unmarshal payout: %w", err)
 	}
 	return &p, nil
 }
 
-// CreateBatch creates multiple payouts in a single request. Idempotency works
-// as in Create.
-func (s *PayoutService) CreateBatch(ctx context.Context, payouts []*CreatePayoutParams, opts ...RequestOption) ([]*Payout, error) {
-	body := map[string]interface{}{"payouts": payouts}
-	data, err := s.http.postIdempotent(ctx, "/vendor/payout/batch", body, opts)
+// CreateBatch creates up to 100 payouts in one request. Idempotency works as
+// in Create.
+func (s *PayoutService) CreateBatch(ctx context.Context, params *CreateBatchParams, opts ...RequestOption) (*PayoutBatch, error) {
+	data, err := s.http.postIdempotent(ctx, "/vendor/payout/batch", params, opts)
 	if err != nil {
 		return nil, err
 	}
-	var resp struct {
-		Payouts []*Payout `json:"payouts"`
+	var b PayoutBatch
+	if err := json.Unmarshal(data, &b); err != nil {
+		return nil, fmt.Errorf("decane: unmarshal batch: %w", err)
 	}
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal payouts: %w", err)
-	}
-	return resp.Payouts, nil
+	return &b, nil
 }
 
-// Get retrieves a payout by ID.
+// Get retrieves a payout by ID (GET /payouts/{id}).
 func (s *PayoutService) Get(ctx context.Context, id string) (*Payout, error) {
-	data, err := s.http.get(ctx, "/vendor/query/payout/"+id, nil)
+	data, err := s.http.get(ctx, "/payouts/"+id, nil)
 	if err != nil {
 		return nil, err
 	}
 	var p Payout
 	if err := json.Unmarshal(data, &p); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal payout: %w", err)
+		return nil, fmt.Errorf("decane: unmarshal payout: %w", err)
 	}
 	return &p, nil
 }
 
-// List returns a paginated list of payouts.
-func (s *PayoutService) List(ctx context.Context, params *ListParams) (*PaginatedList[Payout], error) {
-	p := listToMap(params)
-	data, err := s.http.get(ctx, "/vendor/query/payouts", p)
+// List returns one page of payouts, newest first (GET /payouts).
+func (s *PayoutService) List(ctx context.Context, params *ListParams) (*List[Payout], error) {
+	data, err := s.http.get(ctx, "/payouts", listQuery(params))
 	if err != nil {
 		return nil, err
 	}
-	var result PaginatedList[Payout]
+	var result List[Payout]
 	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal payouts: %w", err)
+		return nil, fmt.Errorf("decane: unmarshal payouts: %w", err)
 	}
 	return &result, nil
 }

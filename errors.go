@@ -4,17 +4,26 @@ import "fmt"
 
 // DecaneError is the base error type for all API errors.
 type DecaneError struct {
-	Message string `json:"message"`
-	Code    string `json:"code"`
-	Status  int    `json:"status"`
+	Message   string `json:"message"`
+	Code      string `json:"code"`
+	Status    int    `json:"status"`
+	Type      string `json:"type,omitempty"`       // invalid_request_error, authentication_error, ...
+	Param     string `json:"param,omitempty"`      // the field a 422 is about
+	RequestID string `json:"request_id,omitempty"` // quote this to support
 }
 
 func (e *DecaneError) Error() string {
-	return fmt.Sprintf("flow: %s (code=%s, status=%d)", e.Message, e.Code, e.Status)
+	return fmt.Sprintf("decane: %s (code=%s, status=%d)", e.Message, e.Code, e.Status)
 }
 
 // AuthenticationError indicates an invalid or missing API key.
 type AuthenticationError struct{ DecaneError }
+
+// PermissionError indicates the key lacks the scope, is suspended, or the region is restricted (403).
+type PermissionError struct{ DecaneError }
+
+// ConflictError indicates a conflict (409): an idempotent request still running or a reused reference_id.
+type ConflictError struct{ DecaneError }
 
 // NotFoundError indicates the requested resource was not found.
 type NotFoundError struct{ DecaneError }
@@ -41,7 +50,7 @@ type InvalidSignatureError struct {
 
 func (e *InvalidSignatureError) Error() string {
 	if e.Message == "" {
-		return "flow: invalid webhook signature"
+		return "decane: invalid webhook signature"
 	}
-	return "flow: " + e.Message
+	return "decane: " + e.Message
 }

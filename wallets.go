@@ -6,60 +6,40 @@ import (
 	"fmt"
 )
 
-// WalletService handles wallet operations.
+// BalanceService reads your balances.
+type BalanceService struct {
+	http *httpClient
+}
+
+// Get returns your balances (GET /balances). Needs the wallets:read scope.
+func (s *BalanceService) Get(ctx context.Context) (*Balance, error) {
+	data, err := s.http.get(ctx, "/balances", nil)
+	if err != nil {
+		return nil, err
+	}
+	var b Balance
+	if err := json.Unmarshal(data, &b); err != nil {
+		return nil, fmt.Errorf("decane: unmarshal balance: %w", err)
+	}
+	return &b, nil
+}
+
+// WalletService lists the named wallets the API key can use.
 type WalletService struct {
 	http *httpClient
 }
 
-// Generate creates a new deposit wallet.
-func (s *WalletService) Generate(ctx context.Context, params *GenerateWalletParams) (*Wallet, error) {
-	data, err := s.http.post(ctx, "/wallets/generate", params)
+// List returns the key's wallets, each with its own balance
+// (GET /vendor/query/balances). Needs the wallets:read scope. Use a wallet ID
+// as SourceWalletID on payouts and swaps.
+func (s *WalletService) List(ctx context.Context) (*WalletList, error) {
+	data, err := s.http.get(ctx, "/vendor/query/balances", nil)
 	if err != nil {
 		return nil, err
 	}
-	var w Wallet
-	if err := json.Unmarshal(data, &w); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal wallet: %w", err)
+	var l WalletList
+	if err := json.Unmarshal(data, &l); err != nil {
+		return nil, fmt.Errorf("decane: unmarshal wallets: %w", err)
 	}
-	return &w, nil
-}
-
-// Get retrieves a wallet by ID.
-func (s *WalletService) Get(ctx context.Context, id string) (*Wallet, error) {
-	data, err := s.http.get(ctx, "/wallets/"+id, nil)
-	if err != nil {
-		return nil, err
-	}
-	var w Wallet
-	if err := json.Unmarshal(data, &w); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal wallet: %w", err)
-	}
-	return &w, nil
-}
-
-// List returns a paginated list of wallets.
-func (s *WalletService) List(ctx context.Context, params *ListParams) (*PaginatedList[Wallet], error) {
-	p := listToMap(params)
-	data, err := s.http.get(ctx, "/wallets", p)
-	if err != nil {
-		return nil, err
-	}
-	var result PaginatedList[Wallet]
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal wallets: %w", err)
-	}
-	return &result, nil
-}
-
-// Balance retrieves the balance for a specific wallet.
-func (s *WalletService) Balance(ctx context.Context, id string) (*Wallet, error) {
-	data, err := s.http.get(ctx, "/wallets/"+id+"/balance", nil)
-	if err != nil {
-		return nil, err
-	}
-	var w Wallet
-	if err := json.Unmarshal(data, &w); err != nil {
-		return nil, fmt.Errorf("flow: unmarshal wallet balance: %w", err)
-	}
-	return &w, nil
+	return &l, nil
 }
